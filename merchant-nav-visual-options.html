@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>商家目录视觉方案</title>
+  <style>
+    :root {
+      --bg: #eef2f7;
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-border: rgba(148, 163, 184, 0.18);
+      --text: #0f172a;
+      --muted: #64748b;
+      --nav-bg: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+      --blue: #2563eb;
+      --blue-soft: rgba(37, 99, 235, 0.14);
+      --shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+      --radius: 24px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+      background: linear-gradient(180deg, #f8fafc 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 28px 28px 40px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+    }
+
+    .subtitle {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .tips {
+      margin: 0 0 28px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(37, 99, 235, 0.08);
+      color: #1d4ed8;
+      font-weight: 600;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .card__head {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.88);
+    }
+
+    .card__tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .card__title {
+      margin: 0 0 6px;
+      font-size: 22px;
+    }
+
+    .card__desc {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+      min-height: 48px;
+    }
+
+    .mock {
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      min-height: 540px;
+    }
+
+    .sidebar {
+      background: var(--nav-bg);
+      color: #e2e8f0;
+      padding: 24px 18px;
+    }
+
+    .brand {
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .brand small {
+      display: block;
+      color: #93c5fd;
+      margin-bottom: 6px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 22px;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .brand span {
+      display: block;
+      color: #cbd5e1;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .nav {
+      display: grid;
+      gap: 12px;
+    }
+
+    .nav-item {
+      position: relative;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(148, 163, 184, 0.1);
+      color: #dbeafe;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .content {
+      padding: 22px;
+      background: rgba(248, 250, 252, 0.86);
+    }
+
+    .hero {
+      padding: 22px 24px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(15, 23, 42, 0.92));
+      color: #eff6ff;
+      margin-bottom: 18px;
+    }
+
+    .hero h3 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: rgba(226, 232, 240, 0.92);
+      line-height: 1.7;
+    }
+
+    .panel-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .panel {
+      min-height: 170px;
+      padding: 18px;
+      border-radius: 22px;
+      background: white;
+      border: 1px solid rgba(226, 232, 240, 0.9);
+    }
+
+    .panel h4 {
+      margin: 0 0 8px;
+      font-size: 20px;
+    }
+
+    .panel p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .pill .nav-item--active {
+      background: rgba(59, 130, 246, 0.3);
+      color: #fff;
+      box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.28);
+    }
+
+    .pill .nav-item--active::after {
+      content: "当前";
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 12px;
+      color: #bfdbfe;
+    }
+
+    .rail .nav-item {
+      padding-left: 22px;
+    }
+
+    .rail .nav-item--active {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+
+    .rail .nav-item--active::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 10px;
+      bottom: 10px;
+      width: 4px;
+      border-radius: 999px;
+      background: #60a5fa;
+    }
+
+    .tabmix .sidebar {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .tabmix .nav-item {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .tabmix .nav-item--active {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.36), rgba(96, 165, 250, 0.18));
+      color: #fff;
+      transform: translateX(4px);
+    }
+
+    .compare {
+      margin-top: 26px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .compare-item {
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+    }
+
+    .compare-item h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+
+    .compare-item ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    @media (max-width: 1280px) {
+      .grid, .compare { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>商家目录激活态对比稿</h1>
+    <p class="subtitle">目标是让左侧目录更像真正的后台导航，并让“当前在哪一页”一眼能看出来。下面 3 个方案都默认基于你刚刚选的结构：左侧固定，右侧单页切换。</p>
+    <div class="tips">看完后直接回复我：`A`、`B` 或 `C`。如果你想混搭，也可以说“要 A 的激活态 + C 的整体风格”。</div>
+
+    <div class="grid">
+      <section class="card">
+        <div class="card__head">
+          <div class="card__tag">A</div>
+          <h2 class="card__title">胶囊高亮</h2>
+          <p class="card__desc">最稳妥的后台目录风格，当前项像一个明显的主按钮，适合答辩展示时一眼看清当前分区。</p>
+        </div>
+        <div class="mock pill">
+          <aside class="sidebar">
+            <div class="brand">
+              <small>E-commerce</small>
+              <strong>智能分析系统</strong>
+              <span>多角色联动的电商经营分析与决策工作台</span>
+            </div>
+            <div class="nav">
+              <div class="nav-item nav-item--active">经营总览</div>
+              <div class="nav-item">核心业务</div>
+              <div class="nav-item">辅助分析</div>
+              <div class="nav-item">详细分析</div>
+            </div>
+          </aside>
+          <div class="content">
+            <div class="hero">
+              <h3>经营总览</h3>
+              <p>聚合商家当前经营表现，先展示简报和核心指标，再进入具体分析。</p>
+            </div>
+            <div class="panel-grid">
+              <div class="panel"><h4>今日经营简报</h4><p>商家一上来先看今天整体状态，不会被细节淹没。</p></div>
+              <div class="panel"><h4>总览指标</h4><p>行为总量、浏览量、成交笔数、成交转化率。</p></div>
+              <div class="panel"><h4>重点商品</h4><p>当前热度最高商品作为今日运营重点。</p></div>
+              <div class="panel"><h4>风险摘要</h4><p>把异常和风险压缩成一句可讲的话。</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card__head">
+          <div class="card__tag">B</div>
+          <h2 class="card__title">竖线指示</h2>
+          <p class="card__desc">更偏专业后台系统，激活态不是整块按钮，而是左侧亮条，更克制、更像管理端。</p>
+        </div>
+        <div class="mock rail">
+          <aside class="sidebar">
+            <div class="brand">
+              <small>E-commerce</small>
+              <strong>智能分析系统</strong>
+              <span>多角色联动的电商经营分析与决策工作台</span>
+            </div>
+            <div class="nav">
+              <div class="nav-item">经营总览</div>
+              <div class="nav-item nav-item--active">核心业务</div>
+              <div class="nav-item">辅助分析</div>
+              <div class="nav-item">详细分析</div>
+            </div>
+          </aside>
+          <div class="content">
+            <div class="hero">
+              <h3>核心业务</h3>
+              <p>把最该处理的经营动作放在最前面，适合答辩时按“问题 -> 动作 -> 结果”讲。</p>
+            </div>
+            <div class="panel-grid">
+              <div class="panel"><h4>用户行为变化</h4><p>最近 24 小时用户偏好和高意向商品变化。</p></div>
+              <div class="panel"><h4>今日已执行运营动作</h4><p>重点观察、补货优先、优化详情页等动作反馈。</p></div>
+              <div class="panel"><h4>热销机会</h4><p>优先放大正在走高的商品势能。</p></div>
+              <div class="panel"><h4>滞销风险</h4><p>抓高浏览低转化商品，降低流量浪费。</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card__head">
+          <div class="card__tag">C</div>
+          <h2 class="card__title">轻量 tab 化</h2>
+          <p class="card__desc">更偏“分步骤讲解”的演示界面，当前项会稍微前推出去，切换感更明显，适合答辩演示。</p>
+        </div>
+        <div class="mock tabmix">
+          <aside class="sidebar">
+            <div class="brand">
+              <small>E-commerce</small>
+              <strong>智能分析系统</strong>
+              <span>多角色联动的电商经营分析与决策工作台</span>
+            </div>
+            <div class="nav">
+              <div class="nav-item">经营总览</div>
+              <div class="nav-item">核心业务</div>
+              <div class="nav-item nav-item--active">辅助分析</div>
+              <div class="nav-item">详细分析</div>
+            </div>
+          </aside>
+          <div class="content">
+            <div class="hero">
+              <h3>辅助分析</h3>
+              <p>把判断依据集中展示，适合老师追问“你为什么这么判断”“AI 是怎么参与的”。</p>
+            </div>
+            <div class="panel-grid">
+              <div class="panel"><h4>AI 经营分析</h4><p>统一商家口径后的摘要解释。</p></div>
+              <div class="panel"><h4>异常预警</h4><p>只看当前商家异常，不再混入全局风险。</p></div>
+              <div class="panel"><h4>类目热点</h4><p>帮助解释当前重点经营方向。</p></div>
+              <div class="panel"><h4>用户价值分层</h4><p>说明哪些用户更值得重点经营。</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="compare">
+      <section class="compare-item">
+        <h3>A 适合什么</h3>
+        <ul>
+          <li>最稳，最像现有风格升级版</li>
+          <li>激活态最明显，老师一眼知道当前页</li>
+          <li>改动风险最低</li>
+        </ul>
+      </section>
+      <section class="compare-item">
+        <h3>B 适合什么</h3>
+        <ul>
+          <li>更像专业后台管理系统</li>
+          <li>风格更克制，不会太像按钮列表</li>
+          <li>如果你想“像产品成品”更推荐这个</li>
+        </ul>
+      </section>
+      <section class="compare-item">
+        <h3>C 适合什么</h3>
+        <ul>
+          <li>演示切换感最强</li>
+          <li>更像“讲一页换一页”的答辩模式</li>
+          <li>视觉个性更强，但也更像演示稿</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
