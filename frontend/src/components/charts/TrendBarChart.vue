@@ -13,6 +13,10 @@ const props = defineProps({
   labelKey: {
     type: String,
     default: 'product_name'
+  },
+  subLabelKey: {
+    type: String,
+    default: ''
   }
 })
 
@@ -31,7 +35,10 @@ function formatWidth(value) {
       class="mini-bar-chart__row"
     >
       <div class="mini-bar-chart__meta">
-        <strong>{{ item[labelKey] }}</strong>
+        <div class="mini-bar-chart__label">
+          <strong>{{ item[labelKey] }}</strong>
+          <small v-if="subLabelKey && item?.[subLabelKey]">{{ item[subLabelKey] }}</small>
+        </div>
         <span>{{ item[valueKey] }}</span>
       </div>
       <div class="mini-bar-chart__track">

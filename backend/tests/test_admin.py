@@ -145,6 +145,8 @@ def test_admin_log_metrics_returns_summary_and_breakdowns(
     assert payload["summary"]["latest_timestamp"]
     assert "last_minute_added" in payload["summary"]
     assert payload["action_breakdown"]
+    assert "category_breakdown" in payload
+    assert "selected_category" in payload
     assert "brand_breakdown" in payload
 
 

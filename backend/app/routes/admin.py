@@ -203,9 +203,9 @@ def logs_metrics():
                 {"action_type": action_type, "count": count}
                 for action_type, count in action_rows
             ],
-            "brand_breakdown": [
             "category_breakdown": category_items,
             "selected_category": selected_category or "",
+            "brand_breakdown": [
                 {"brand": brand_display.get(brand, brand), "count": count}
                 for brand, count in brand_rows
             ],

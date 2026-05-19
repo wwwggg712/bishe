@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
+from math import sqrt
 
 
 ACTION_SCORES = {
@@ -272,8 +273,9 @@ class PredictionService:
             baseline_rate = baseline_purchases / baseline_views if baseline_views else 0
             current_rate = current_purchases / current_views if current_views else 0
             traffic_ratio = self._relative_ratio(current_views, baseline_views)
+            z_score = (current_views - baseline_views) / sqrt(max(baseline_views, 1))
 
-            if current_views >= 3 and traffic_ratio >= 2 and current_rate <= baseline_rate:
+            if current_views >= 3 and z_score >= 2.0 and current_rate <= baseline_rate:
                 baseline = baseline_views
                 current_value = current_views
                 delta = current_value - baseline
@@ -287,6 +289,7 @@ class PredictionService:
                         "baseline_value": baseline,
                         "delta": delta,
                         "change_ratio": traffic_ratio,
+                        "z_score": round(z_score, 2),
                         "severity": self._severity_from_ratio(traffic_ratio),
                         "reason": (
                             f"{stats['product_name']} 最近浏览量从 {baseline} 增长到 {current_value}，"

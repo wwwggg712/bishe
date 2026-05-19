@@ -37,6 +37,20 @@ vi.mock('../api/analytics.js', () => ({
   fetchMerchantBrief: vi.fn()
 }))
 
+vi.mock('../api/merchantOps.js', () => ({
+  fetchMerchantOpsOverview: vi.fn(),
+  deactivateMerchantProduct: vi.fn()
+}))
+
+vi.mock('../api/merchantCharts.js', () => ({
+  fetchMerchantChartShare: vi.fn(),
+  fetchMerchantChartTrend: vi.fn()
+}))
+
+vi.mock('../api/merchantPrediction.js', () => ({
+  fetchMerchantSalesForecast: vi.fn()
+}))
+
 import {
   fetchCategories,
   fetchBrands,
@@ -55,6 +69,10 @@ import {
   fetchUserRfm
 } from '../api/analytics.js'
 
+import { deactivateMerchantProduct, fetchMerchantOpsOverview } from '../api/merchantOps.js'
+import { fetchMerchantChartShare, fetchMerchantChartTrend } from '../api/merchantCharts.js'
+import { fetchMerchantSalesForecast } from '../api/merchantPrediction.js'
+
 describe('merchant dashboard route', () => {
   it('registers the merchant dashboard view under the merchant route', () => {
     const appRoute = routes.find((route) => route.path === '/')
@@ -67,6 +85,7 @@ describe('merchant dashboard route', () => {
 
 describe('merchant dashboard', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     mockRoute.query = {}
     fetchOverview.mockResolvedValue({
       totals: {
@@ -195,6 +214,75 @@ describe('merchant dashboard', () => {
         }
       }
     })
+    fetchMerchantOpsOverview.mockResolvedValue({
+      summary: { days: 30, revenue: 12800, cost: 7680, profit: 5120 },
+      inventory_items: [
+        {
+          product_id: 1,
+          name: '轻量跑鞋',
+          category: '运动鞋',
+          brand: '云步',
+          stock: 120,
+          color_breakdown: [
+            { color: '红', count: 20 },
+            { color: '蓝', count: 50 },
+            { color: '黑', count: 50 }
+          ],
+          price: 299,
+          cost_price: 179.4,
+          is_active: true
+        }
+      ],
+      delist_suggestions: [
+        {
+          product_id: 9,
+          name: '瑜伽弹力带',
+          category: '居家运动',
+          brand: 'FlexPro',
+          purchase_count_30d: 0,
+          stock: 12,
+          price: 89
+        }
+      ],
+      inactive_items: [],
+      focus_brands: [{ brand: '云步', purchase_count_30d: 6 }]
+    })
+    deactivateMerchantProduct.mockResolvedValue({
+      message: '下架成功',
+      product: { id: 9, is_active: false }
+    })
+    fetchMerchantChartShare.mockResolvedValue({
+      category_share: [
+        { name: '运动鞋', value: 520 },
+        { name: '箱包', value: 330 },
+        { name: '其它', value: 120 }
+      ],
+      brand_share: [
+        { name: '云步', value: 64 },
+        { name: '活力穿', value: 18 }
+      ]
+    })
+    fetchMerchantChartTrend.mockResolvedValue({
+      days: ['2026-05-11', '2026-05-12', '2026-05-13', '2026-05-14', '2026-05-15', '2026-05-16', '2026-05-17'],
+      series: [
+        { name: '浏览', data: [120, 132, 140, 156, 160, 172, 180] },
+        { name: '购买', data: [8, 10, 9, 12, 14, 16, 18] }
+      ]
+    })
+    fetchMerchantSalesForecast.mockResolvedValue({
+      product: { product_id: 1, name: '爆火商品A', brand: '云步', category: '户外装备', price: 99, image_url: '' },
+      history: Array.from({ length: 30 }, (_, idx) => ({
+        date: `2026-04-${String(idx + 1).padStart(2, '0')}`,
+        value: 1
+      })),
+      forecast: Array.from({ length: 30 }, (_, idx) => ({
+        date: `2026-05-${String(idx + 1).padStart(2, '0')}`,
+        value: 2
+      })),
+      forecast_total: { value: 60, lower: 40, upper: 80 },
+      confidence: 'medium',
+      explain: ['近7天日均销量 1.0', '加入爆火回落衰减，避免预测过于乐观']
+    })
   })
 
   it('defaults to overview panel and hides other merchant panels', async () => {
@@ -208,12 +296,29 @@ describe('merchant dashboard', () => {
 
     await flushPromises()
 
+    expect(fetchMerchantChartShare).toHaveBeenCalled()
+    expect(fetchMerchantChartTrend).toHaveBeenCalled()
+    expect(fetchMerchantSalesForecast).toHaveBeenCalledWith({ days: 30 })
     expect(wrapper.text()).toContain('经营总览')
     expect(wrapper.text()).toContain('今日经营简报')
     expect(wrapper.text()).toContain('热销机会')
+    expect(wrapper.text()).toContain('爆火商品销量预测（30天）')
+    expect(wrapper.text()).toContain('预测总销量 60')
+    expect(wrapper.text()).toContain('预测区间 40 - 80')
+    expect(wrapper.text()).toContain('近7天日均销量 1.0')
     expect(wrapper.text()).toContain('行为总量')
     expect(wrapper.text()).toContain('浏览量')
     expect(wrapper.text()).toContain('品牌热度')
+    expect(wrapper.text()).toContain('口径说明（点击展开）')
+    expect(wrapper.text()).toContain('近30天利润')
+    expect(wrapper.text()).toContain('5120.00')
+    expect(wrapper.find('[data-testid="merchant-color-1-红"]').text()).toContain('红')
+    expect(wrapper.find('[data-testid="merchant-color-1-红"]').text()).toContain('20')
+    expect(wrapper.text()).toContain('建议下架')
+    expect(wrapper.text()).toContain('销量冠军品牌TOP')
+    expect(wrapper.text()).toContain('品类占比')
+    expect(wrapper.text()).toContain('品牌销量占比')
+    expect(wrapper.text()).toContain('近7天趋势')
     expect(wrapper.text()).toContain('轻量跑鞋热度持续走高')
     expect(wrapper.text()).toContain('1280')
     expect(wrapper.text()).toContain('860')
@@ -221,7 +326,29 @@ describe('merchant dashboard', () => {
     expect(wrapper.text()).toContain('轻量跑鞋')
     expect(wrapper.text()).not.toContain('用户行为变化')
     expect(wrapper.text()).not.toContain('AI 经营分析')
-    expect(wrapper.text()).not.toContain('转化漏斗')
+    expect(wrapper.text()).toContain('转化漏斗')
+    expect(wrapper.text()).toContain('整体成交转化率')
+    wrapper.unmount()
+  })
+
+  it('allows merchant to deactivate suggested products from ops overview', async () => {
+    const wrapper = mount(MerchantDashboard, {
+      global: {
+        stubs: {
+          RouterLink: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(fetchMerchantOpsOverview).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('button[data-testid="merchant-delist-9"]').trigger('click')
+    await flushPromises()
+
+    expect(deactivateMerchantProduct).toHaveBeenCalledWith(9)
+    expect(fetchMerchantOpsOverview).toHaveBeenCalledTimes(2)
     wrapper.unmount()
   })
 
@@ -307,9 +434,9 @@ describe('merchant dashboard', () => {
     expect(themeCss).toContain('position: sticky;')
     expect(themeCss).toContain('top: 0;')
     expect(themeCss).toContain('.app-shell__nav-link.router-link-exact-active')
-    expect(themeCss).toContain('background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);')
+    expect(themeCss).toContain('background: var(--accent-gradient);')
     expect(themeCss).toContain('color: #ffffff;')
-    expect(themeCss).toContain('box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);')
+    expect(themeCss).toContain('box-shadow: var(--accent-shadow);')
     expect(themeCss).toContain('transform: translateX(4px);')
     expect(themeCss).toContain('.merchant-dashboard--panel')
     expect(themeCss).toContain('min-height: calc(100vh - 140px);')

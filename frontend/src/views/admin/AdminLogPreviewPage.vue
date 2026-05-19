@@ -7,6 +7,7 @@ import TrendBarChart from '../../components/charts/TrendBarChart.vue'
 
 const isLoading = ref(true)
 const errorMessage = ref('')
+const selectedCategory = ref('')
 const payload = ref({
   summary: {
     total_logs: 0,
@@ -14,6 +15,8 @@ const payload = ref({
     last_minute_added: 0
   },
   action_breakdown: [],
+  category_breakdown: [],
+  selected_category: '',
   brand_breakdown: []
 })
 
@@ -25,6 +28,8 @@ function normalizePayload(data = {}) {
       last_minute_added: data.summary?.last_minute_added || 0
     },
     action_breakdown: data.action_breakdown || [],
+    category_breakdown: data.category_breakdown || [],
+    selected_category: data.selected_category || '',
     brand_breakdown: data.brand_breakdown || []
   }
 }
@@ -52,8 +57,18 @@ async function loadMetrics() {
   errorMessage.value = ''
 
   try {
-    const metrics = await fetchAdminLogMetrics()
-    payload.value = normalizePayload(metrics)
+    const metrics = await fetchAdminLogMetrics(
+      selectedCategory.value ? { category: selectedCategory.value } : {}
+    )
+    const normalized = normalizePayload(metrics)
+    payload.value = normalized
+    if (!selectedCategory.value) {
+      selectedCategory.value = normalized.selected_category
+      return
+    }
+    if (normalized.selected_category && normalized.selected_category !== selectedCategory.value) {
+      selectedCategory.value = normalized.selected_category
+    }
   } catch (error) {
     errorMessage.value = error?.response?.data?.message || '日志统计加载失败，请稍后重试。'
   } finally {
@@ -67,6 +82,11 @@ function handleAutoRefreshIntervalChange(event) {
   const nextValue = Number(event?.target?.value)
   if (!Number.isFinite(nextValue) || nextValue <= 0) return
   autoRefresh.intervalSec.value = nextValue
+}
+
+function handleCategoryChange(event) {
+  selectedCategory.value = event?.target?.value || ''
+  autoRefresh.refreshNow(true)
 }
 
 onMounted(() => {
@@ -140,12 +160,40 @@ onMounted(() => {
       <article class="dashboard-panel">
         <div class="dashboard-panel__header">
           <div>
-            <p class="section-kicker">BRAND HEAT</p>
-            <h3>品牌热度</h3>
-            <p>按品牌聚合行为量，适合答辩现场展示“刷新后结果变化”。</p>
+            <p class="section-kicker">CATEGORY & BRAND</p>
+            <h3>品类 → 品牌热度</h3>
+            <p>先看热门品类，再看该品类下品牌热度，避免只看品牌难以理解。</p>
           </div>
-          <span class="dashboard-panel__badge">{{ payload.brand_breakdown.length }} 个品牌</span>
+          <div style="display: inline-flex; align-items: center; gap: 8px;">
+            <select
+              class="admin-log-preview__page-size"
+              :value="selectedCategory"
+              :disabled="!payload.category_breakdown.length"
+              @change="handleCategoryChange"
+            >
+              <option v-if="!payload.category_breakdown.length" value="">暂无品类</option>
+              <option
+                v-for="item in payload.category_breakdown"
+                :key="item.category"
+                :value="item.category"
+              >
+                {{ item.category }}
+              </option>
+            </select>
+            <span class="dashboard-panel__badge">{{ payload.brand_breakdown.length }} 个品牌</span>
+          </div>
         </div>
+
+        <ul v-if="payload.category_breakdown.length" class="region-list__items" style="margin-bottom: 18px;">
+          <li
+            v-for="item in payload.category_breakdown"
+            :key="item.category"
+            class="region-list__item"
+          >
+            <span>{{ item.category }}</span>
+            <strong>{{ item.count }}</strong>
+          </li>
+        </ul>
 
         <TrendBarChart
           v-if="payload.brand_breakdown.length"

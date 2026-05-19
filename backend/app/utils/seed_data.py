@@ -1,4 +1,7 @@
+import json
+import os
 from decimal import Decimal
+from urllib.parse import quote
 
 from ..extensions import db
 from ..models.product import Product
@@ -242,6 +245,42 @@ DEMO_TASKS = (
     },
 )
 
+_IMAGE_OVERRIDES = None
+
+
+def _load_image_overrides():
+    global _IMAGE_OVERRIDES
+    if _IMAGE_OVERRIDES is not None:
+        return _IMAGE_OVERRIDES
+
+    mapping_path = os.path.join(os.path.dirname(__file__), "product_images.json")
+    if not os.path.exists(mapping_path):
+        _IMAGE_OVERRIDES = {}
+        return _IMAGE_OVERRIDES
+
+    try:
+        with open(mapping_path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle) or {}
+    except (OSError, json.JSONDecodeError):
+        payload = {}
+
+    _IMAGE_OVERRIDES = payload if isinstance(payload, dict) else {}
+    return _IMAGE_OVERRIDES
+
+
+def _demo_image_url(product_name, category):
+    overrides = _load_image_overrides()
+    override_url = overrides.get(product_name)
+    if override_url:
+        return override_url
+
+    prompt = quote(
+        f"ecommerce product photo, {product_name}, category {category}, studio lighting, white background, high detail"
+    )
+    return (
+        "https://coreva-normal.trae.ai/api/ide/v1/text_to_image"
+        f"?prompt={prompt}&image_size=square"
+    )
 
 def seed_demo_data():
     created = {"users": 0, "products": 0, "tasks": 0}
@@ -273,6 +312,8 @@ def seed_demo_data():
                 category=payload["category"],
                 brand=payload["brand"],
                 price=payload["price"],
+                cost_price=(payload["price"] * Decimal("0.60")).quantize(Decimal("0.01")),
+                image_url=_demo_image_url(payload["name"], payload["category"]),
                 stock=payload["stock"],
             )
             db.session.add(product)

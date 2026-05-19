@@ -8,6 +8,7 @@ import AdminTasksPage from '../views/admin/AdminTasksPage.vue'
 import AdminUsersPage from '../views/admin/AdminUsersPage.vue'
 import HomeView from '../views/common/HomeView.vue'
 import CustomerHome from '../views/customer/CustomerHome.vue'
+import PriceCompareView from '../views/customer/PriceCompareView.vue'
 import ProfileView from '../views/customer/ProfileView.vue'
 import RecommendationView from '../views/customer/RecommendationView.vue'
 import MerchantDashboard from '../views/merchant/MerchantDashboard.vue'
@@ -54,6 +55,14 @@ export const routes = [
         path: 'customer/recommendations',
         name: 'customer-recommendations',
         component: RecommendationView,
+        meta: {
+          roles: ['customer']
+        }
+      },
+      {
+        path: 'customer/price-compare',
+        name: 'customer-price-compare',
+        component: PriceCompareView,
         meta: {
           roles: ['customer']
         }

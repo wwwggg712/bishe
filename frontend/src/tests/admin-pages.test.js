@@ -101,6 +101,11 @@ describe('admin standalone pages', () => {
         { action_type: '浏览', count: 620 },
         { action_type: '点击', count: 280 }
       ],
+      category_breakdown: [
+        { category: '运动鞋', count: 680 },
+        { category: '运动服', count: 240 }
+      ],
+      selected_category: '运动鞋',
       brand_breakdown: [
         { brand: '云步', count: 520 },
         { brand: '活力穿', count: 180 }
@@ -182,14 +187,15 @@ describe('admin standalone pages', () => {
     expect(wrapper.text()).toContain('3 个账号')
   })
 
-  it('renders admin log preview page with summary and raw logs', async () => {
+  it('renders admin log preview page with summary and metrics', async () => {
     const wrapper = mount(AdminLogPreviewPage)
     await flushPromises()
 
     expect(wrapper.text()).toContain('日志实时统计')
     expect(wrapper.text()).toContain('日志总量')
     expect(wrapper.text()).toContain('最近1分钟新增')
-    expect(wrapper.text()).toContain('品牌热度')
+    expect(wrapper.text()).toContain('品类 → 品牌热度')
+    expect(wrapper.text()).toContain('运动鞋')
     expect(wrapper.text()).toContain('云步')
     expect(wrapper.text()).toContain('1280')
     expect(wrapper.text()).toContain('20')

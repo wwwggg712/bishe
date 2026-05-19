@@ -19,11 +19,17 @@ import {
   fetchRegions,
   fetchUserRfm
 } from '../../api/analytics.js'
+import { deactivateMerchantProduct, fetchMerchantOpsOverview } from '../../api/merchantOps.js'
+import { fetchMerchantChartShare, fetchMerchantChartTrend } from '../../api/merchantCharts.js'
+import { fetchMerchantSalesForecast } from '../../api/merchantPrediction.js'
 import { useAutoRefresh } from '../../composables/useAutoRefresh.js'
 import BrandsView from './BrandsView.vue'
 import FunnelView from './FunnelView.vue'
 import HotProductsView from './HotProductsView.vue'
+import MerchantOpsOverview from './MerchantOpsOverview.vue'
 import StrategyView from './StrategyView.vue'
+import SharePieChart from '../../components/charts/SharePieChart.vue'
+import TrendLineChart from '../../components/charts/TrendLineChart.vue'
 
 const route = useRoute()
 const isLoading = ref(true)
@@ -61,6 +67,16 @@ const regionItems = ref([])
 const categoryItems = ref([])
 const brandItems = ref([])
 const selectedBrandCategory = ref('')
+const opsOverview = ref({
+  summary: { days: 30, revenue: 0, cost: 0, profit: 0 },
+  inventory_items: [],
+  delist_suggestions: [],
+  inactive_items: [],
+  focus_brands: []
+})
+const deactivatingProductId = ref(0)
+const chartShare = ref({ category_share: [], brand_share: [] })
+const chartTrend = ref({ days: [], series: [] })
 const userRfmItems = ref([])
 const briefSummary = ref('正在生成今日经营简报...')
 const isGeneratingAi = ref(false)
@@ -81,6 +97,15 @@ const merchantActionSummary = ref({
 const merchantActionItems = ref([])
 const actionInFlightKey = ref('')
 const isRefreshingSnapshot = ref(false)
+const salesForecast = ref({
+  product: null,
+  history: [],
+  forecast: [],
+  forecast_total: { value: 0, lower: 0, upper: 0 },
+  confidence: 'low',
+  explain: []
+})
+const isLoadingForecast = ref(false)
 
 const ACTION_LABELS = {
   focus_watch: '设为重点观察',
@@ -111,6 +136,33 @@ const activeSection = computed(() => {
   return 'overview'
 })
 
+const financeCards = computed(() => {
+  const days = Number(opsOverview.value?.summary?.days || 30)
+  const revenue = Number(opsOverview.value?.summary?.revenue || 0)
+  const cost = Number(opsOverview.value?.summary?.cost || 0)
+  const profit = Number(opsOverview.value?.summary?.profit || 0)
+  const profitCardLabel = profit < 0 ? `近${days}天亏损` : `近${days}天利润`
+  const moneyFormatter = (value) => Number(value || 0).toFixed(2)
+
+  return [
+    {
+      label: `近${days}天收入`,
+      value: moneyFormatter(revenue),
+      hint: '估算：购买次数×商品售价'
+    },
+    {
+      label: `近${days}天成本`,
+      value: moneyFormatter(cost),
+      hint: '估算：购买次数×商品成本价'
+    },
+    {
+      label: profitCardLabel,
+      value: moneyFormatter(profit),
+      hint: profit < 0 ? '亏损=成本-收入' : '利润=收入-成本'
+    }
+  ]
+})
+
 const overviewCards = computed(() => {
   const totals = overview.value.totals
   const purchaseRate = `${((totals.purchase_rate || 0) * 100).toFixed(1)}%`
@@ -139,7 +191,97 @@ const overviewCards = computed(() => {
   ]
 })
 
+function splitBulletItems(raw) {
+  const textValue = String(raw || '').trim()
+  if (!textValue) {
+    return []
+  }
+
+  const parts = textValue
+    .split(/(?=\d+[）\)]|\bP\d+(?:-\d+)?[-）\)])/i)
+    .map((part) => part.trim())
+    .filter(Boolean)
+
+  if (parts.length <= 1) {
+    return [textValue]
+  }
+
+  return parts
+}
+
+function normalizeBulletItem(raw) {
+  return String(raw || '')
+    .replace(/^[\s]*(?:P\d+(?:-\d+)?-\d+[）\)]|P\d+(?:-\d+)?-|P\d+(?:-\d+)?[）\)]|\d+[）\)])[ ]*/i, '')
+    .trim()
+}
+
+function buildBriefBlocks(raw) {
+  const source = String(raw || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/[【】]/g, '')
+    .replace(/(核心结论|机会点|风险预警|行动清单)\s*[:：]/g, '\n$1：')
+    .trim()
+
+  if (!source) {
+    return []
+  }
+
+  const lines = source
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  const titleMap = {
+    核心结论: '核心结论',
+    机会点: '机会点',
+    风险预警: '风险预警',
+    行动清单: '行动清单'
+  }
+
+  const blocks = []
+  let currentBlock = null
+
+  for (const line of lines) {
+    const headingOnlyMatch = line.match(/^(核心结论|机会点|风险预警|行动清单)\s*[:：]?\s*$/)
+    if (headingOnlyMatch) {
+      const sectionKey = headingOnlyMatch[1]
+      currentBlock = { title: titleMap[sectionKey] || sectionKey, items: [] }
+      blocks.push(currentBlock)
+      continue
+    }
+
+    const headingMatch = line.match(/^(核心结论|机会点|风险预警|行动清单)[:：]\s*(.*)$/)
+    if (headingMatch) {
+      const sectionKey = headingMatch[1]
+      currentBlock = { title: titleMap[sectionKey] || sectionKey, items: [] }
+      blocks.push(currentBlock)
+      const rest = headingMatch[2].trim()
+      if (rest) {
+        splitBulletItems(rest)
+          .map(normalizeBulletItem)
+          .filter(Boolean)
+          .forEach((item) => currentBlock.items.push(item))
+      }
+      continue
+    }
+
+    if (!currentBlock) {
+      currentBlock = { title: '核心结论', items: [] }
+      blocks.push(currentBlock)
+    }
+
+    splitBulletItems(line)
+      .map(normalizeBulletItem)
+      .filter(Boolean)
+      .forEach((item) => currentBlock.items.push(item))
+  }
+
+  return blocks.filter((block) => block.items.length)
+}
+
 const topProduct = computed(() => hotProducts.value[0] || overview.value.top_products[0] || null)
+const briefBlocks = computed(() => buildBriefBlocks(briefSummary.value))
 const warningStrategies = computed(() => strategyItems.value.filter((item) => (item.purchase_rate || 0) < 0.1))
 const opportunityItems = computed(() => hotProducts.value.slice(0, 3))
 const riskItems = computed(() => warningStrategies.value.slice(0, 3))
@@ -247,6 +389,40 @@ const cockpitHighlights = computed(() => [
   }
 ])
 
+const forecastChart = computed(() => {
+  const payload = salesForecast.value
+  const historyItems = payload?.history || []
+  const forecastItems = payload?.forecast || []
+  if (!historyItems.length && !forecastItems.length) {
+    return { days: [], series: [] }
+  }
+
+  const historyDays = historyItems.map((item) => item.date)
+  const forecastDays = forecastItems.map((item) => item.date)
+  const days = [...historyDays, ...forecastDays]
+  const historyData = historyItems.map((item) => item.value).concat(Array.from({ length: forecastItems.length }, () => null))
+  const forecastData = Array.from({ length: historyItems.length }, () => null).concat(forecastItems.map((item) => item.value))
+
+  return {
+    days,
+    series: [
+      { name: '历史销量', data: historyData },
+      { name: '预测销量', data: forecastData }
+    ]
+  }
+})
+
+function buildForecastFallback(message) {
+  return {
+    product: null,
+    history: [],
+    forecast: [],
+    forecast_total: { value: 0, lower: 0, upper: 0 },
+    confidence: 'low',
+    explain: [message]
+  }
+}
+
 function buildMerchantInsightPayload() {
   const bestProduct = hotProducts.value[0]
 
@@ -260,12 +436,42 @@ function buildMerchantInsightPayload() {
   }
 }
 
+function buildBriefFallback() {
+  const bestProduct = hotProducts.value[0]
+  const productName = bestProduct?.product_name || '重点商品'
+  const hotScore = bestProduct?.hot_score ?? bestProduct?.count ?? 0
+  const purchaseRate = Number(overview.value?.totals?.purchase_rate || 0)
+  const purchaseRateText = `${(purchaseRate * 100).toFixed(1)}%`
+  const anomalyCount = criticalAnomalies.value.length
+  const coldCount = coldProducts.value.length
+
+  const pieces = [
+    `今日经营简报（简版）：重点关注${productName}（热度${hotScore}），当前成交转化率${purchaseRateText}。`,
+    anomalyCount
+      ? `检测到${anomalyCount}条高优先级异常预警，建议优先排查详情页转化链路与流量质量。`
+      : '暂无高优先级异常预警，可继续围绕重点商品做曝光和促销。',
+  ]
+
+  if (coldCount) {
+    pieces.push(`另有${coldCount}个冷门商品可考虑做促销清理或下架评估。`)
+  }
+
+  return pieces.join('')
+}
+
 async function handleGenerateAiAnalysis() {
   isGeneratingAi.value = true
   errorMessage.value = ''
 
   try {
-    const payload = await fetchMerchantAiAnalysis(buildMerchantInsightPayload())
+    let timeoutId = null
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('timeout')), 25000)
+    })
+    const payload = await Promise.race([fetchMerchantAiAnalysis(buildMerchantInsightPayload()), timeoutPromise])
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
     merchantAiSummary.value = payload.summary || 'AI 经营分析生成成功。'
     merchantAiMeta.value = {
       mode: payload.mode || 'fallback',
@@ -274,6 +480,12 @@ async function handleGenerateAiAnalysis() {
     }
   } catch (error) {
     errorMessage.value = error?.response?.data?.message || 'AI 经营分析生成失败，请稍后重试。'
+    merchantAiSummary.value = '模型响应较慢或暂时不可用，已切换为内置分析口径，请稍后再试。'
+    merchantAiMeta.value = {
+      mode: 'fallback',
+      provider: merchantAiMeta.value.provider || 'internal',
+      model: merchantAiMeta.value.model || 'rule-based-fallback'
+    }
   } finally {
     isGeneratingAi.value = false
   }
@@ -281,21 +493,33 @@ async function handleGenerateAiAnalysis() {
 
 async function refreshOverviewSnapshot() {
   isRefreshingSnapshot.value = true
+  isLoadingForecast.value = true
   errorMessage.value = ''
+  const forecastPromise = fetchMerchantSalesForecast({ days: 30 }).catch((error) =>
+    buildForecastFallback(error?.response?.data?.message || '销量预测生成失败，请稍后重试。')
+  )
 
   try {
-    const [overviewPayload, brandPayload] = await Promise.all([
+    const [overviewPayload, brandPayload, opsPayload, sharePayload, trendPayload] = await Promise.all([
       fetchOverview(),
-      fetchBrands(selectedBrandCategory.value ? { category: selectedBrandCategory.value } : {})
+      fetchBrands(selectedBrandCategory.value ? { category: selectedBrandCategory.value } : {}),
+      fetchMerchantOpsOverview({ days: 30, low_sales_threshold: 3, brand_top_n: 5 }),
+      fetchMerchantChartShare({ top_n: 5 }),
+      fetchMerchantChartTrend({ days: 7 })
     ])
     overview.value = {
       ...overview.value,
       ...overviewPayload
     }
     brandItems.value = brandPayload.items || []
+    opsOverview.value = opsPayload || opsOverview.value
+    chartShare.value = sharePayload || chartShare.value
+    chartTrend.value = trendPayload || chartTrend.value
   } catch (error) {
     errorMessage.value = error?.response?.data?.message || '刷新经营摘要失败，请稍后重试。'
   } finally {
+    salesForecast.value = (await forecastPromise) || buildForecastFallback('暂无可预测商品：近7/30天购买数据不足')
+    isLoadingForecast.value = false
     isRefreshingSnapshot.value = false
   }
 }
@@ -318,30 +542,37 @@ async function handleBrandCategoryChange(nextCategory) {
   await loadBrandsForCategory(nextCategory)
 }
 
+async function handleDeactivateProduct(productId) {
+  deactivatingProductId.value = productId
+  errorMessage.value = ''
+  try {
+    await deactivateMerchantProduct(productId)
+    opsOverview.value = await fetchMerchantOpsOverview({ days: 30, low_sales_threshold: 3, brand_top_n: 5 })
+  } catch (error) {
+    errorMessage.value = error?.response?.data?.message || '下架失败，请稍后重试。'
+  } finally {
+    deactivatingProductId.value = 0
+  }
+}
+
 async function loadDashboard() {
   isLoading.value = true
+  isLoadingForecast.value = true
   errorMessage.value = ''
+  const forecastPromise = fetchMerchantSalesForecast({ days: 30 }).catch((error) =>
+    buildForecastFallback(error?.response?.data?.message || '销量预测生成失败，请稍后重试。')
+  )
 
   try {
-    const [
-      overviewPayload,
-      funnelPayload,
-      regionPayload,
-      categoryPayload,
-      brandPayload,
-      hotProductPayload,
-      coldProductPayload,
-      userRfmPayload,
-      strategyPayload,
-      anomalyPayload,
-      merchantActionPayload,
-      merchantUserBehaviorPayload
-    ] = await Promise.all([
+    const results = await Promise.allSettled([
       fetchOverview(),
       fetchFunnel(),
       fetchRegions(),
       fetchCategories(),
       fetchBrands(),
+      fetchMerchantOpsOverview({ days: 30, low_sales_threshold: 3, brand_top_n: 5 }),
+      fetchMerchantChartShare({ top_n: 5 }),
+      fetchMerchantChartTrend({ days: 7 }),
       fetchHotProducts(),
       fetchColdProducts(),
       fetchUserRfm(),
@@ -351,9 +582,56 @@ async function loadDashboard() {
       fetchMerchantUserBehavior()
     ])
 
-    overview.value = {
-      ...overview.value,
-      ...overviewPayload
+    const [
+      overviewResult,
+      funnelResult,
+      regionResult,
+      categoryResult,
+      brandResult,
+      opsResult,
+      shareResult,
+      trendResult,
+      hotProductResult,
+      coldProductResult,
+      userRfmResult,
+      strategyResult,
+      anomalyResult,
+      merchantActionResult,
+      merchantUserBehaviorResult
+    ] = results
+
+    const overviewPayload = overviewResult.status === 'fulfilled' ? overviewResult.value : null
+    const funnelPayload = funnelResult.status === 'fulfilled' ? funnelResult.value : { items: [] }
+    const regionPayload = regionResult.status === 'fulfilled' ? regionResult.value : { items: [] }
+    const categoryPayload = categoryResult.status === 'fulfilled' ? categoryResult.value : { items: [] }
+    const brandPayload = brandResult.status === 'fulfilled' ? brandResult.value : { items: [] }
+    const opsPayload = opsResult.status === 'fulfilled' ? opsResult.value : null
+    const sharePayload = shareResult.status === 'fulfilled' ? shareResult.value : chartShare.value
+    const trendPayload = trendResult.status === 'fulfilled' ? trendResult.value : chartTrend.value
+    const hotProductPayload = hotProductResult.status === 'fulfilled' ? hotProductResult.value : { items: [] }
+    const coldProductPayload = coldProductResult.status === 'fulfilled' ? coldProductResult.value : { items: [] }
+    const userRfmPayload = userRfmResult.status === 'fulfilled' ? userRfmResult.value : { items: [] }
+    const strategyPayload = strategyResult.status === 'fulfilled' ? strategyResult.value : { items: [] }
+    const anomalyPayload = anomalyResult.status === 'fulfilled' ? anomalyResult.value : { items: [] }
+    const merchantActionPayload =
+      merchantActionResult.status === 'fulfilled'
+        ? merchantActionResult.value
+        : { summary: { total: 0, by_action: {} }, items: [] }
+    const merchantUserBehaviorPayload =
+      merchantUserBehaviorResult.status === 'fulfilled'
+        ? merchantUserBehaviorResult.value
+        : { preference_changes: [], intent_products: [] }
+
+    const criticalFailure = !overviewPayload || !opsPayload
+    if (criticalFailure) {
+      errorMessage.value = '仪表页部分数据加载失败，请稍后重试。'
+    }
+
+    if (overviewPayload) {
+      overview.value = {
+        ...overview.value,
+        ...overviewPayload
+      }
     }
     funnel.value = normalizeFunnel(funnelPayload.items || [])
     regionItems.value = regionPayload.items || []
@@ -365,7 +643,10 @@ async function loadDashboard() {
     if (shouldPickDefault) {
       await loadBrandsForCategory(selectedBrandCategory.value)
     }
-    hotProducts.value = hotProductPayload.items || overviewPayload.top_products || []
+    opsOverview.value = opsPayload || opsOverview.value
+    chartShare.value = sharePayload || chartShare.value
+    chartTrend.value = trendPayload || chartTrend.value
+    hotProducts.value = hotProductPayload.items || overviewPayload?.top_products || []
     coldProducts.value = coldProductPayload.items || []
     userRfmItems.value = userRfmPayload.items || []
     strategyItems.value = strategyPayload.items || []
@@ -378,19 +659,25 @@ async function loadDashboard() {
     }
 
     if (hotProducts.value.length) {
-      const briefPayload = await fetchMerchantBrief({
-        scene: 'merchant',
-        ...buildMerchantInsightPayload(),
-        trend_label: anomalyItems.value.length ? 'warning' : 'up',
-      })
-      briefSummary.value = briefPayload.summary || '今日经营简报生成成功。'
+      try {
+        const briefPayload = await fetchMerchantBrief({
+          scene: 'merchant',
+          ...buildMerchantInsightPayload(),
+          trend_label: anomalyItems.value.length ? 'warning' : 'up',
+        })
+        briefSummary.value = briefPayload.summary || buildBriefFallback()
+      } catch (error) {
+        briefSummary.value = buildBriefFallback()
+      }
     } else {
       briefSummary.value = '当前暂无足够数据生成今日经营简报。'
     }
   } catch (error) {
     errorMessage.value = error?.response?.data?.message || '仪表页数据加载失败，请稍后重试。'
-    briefSummary.value = '今日经营简报生成失败，请稍后重试。'
+    briefSummary.value = hotProducts.value.length ? buildBriefFallback() : '当前暂无足够数据生成今日经营简报。'
   } finally {
+    salesForecast.value = (await forecastPromise) || buildForecastFallback('暂无可预测商品：近7/30天购买数据不足')
+    isLoadingForecast.value = false
     isLoading.value = false
   }
 }
@@ -447,13 +734,19 @@ onMounted(() => {
       <article class="merchant-brief__hero-card">
         <div class="merchant-brief__hero-copy">
           <p class="section-kicker">TODAY SUMMARY</p>
-          <h3>今日经营简报</h3>
-          <p>{{ briefSummary }}</p>
-        </div>
-        <div class="merchant-brief__focus">
-          <span>重点商品</span>
-          <strong>{{ topProduct?.product_name || '待生成' }}</strong>
-          <small>当前最高热度商品，适合作为今日运营重点</small>
+          <h3 class="merchant-brief__title">今日经营简报</h3>
+          <div class="merchant-brief__summary">
+            <section
+              v-for="block in briefBlocks"
+              :key="block.title"
+              class="merchant-brief__summary-block"
+            >
+              <strong class="merchant-brief__summary-title">{{ block.title }}</strong>
+              <ul class="merchant-brief__summary-list">
+                <li v-for="(item, index) in block.items" :key="`${block.title}-${index}`">{{ item }}</li>
+              </ul>
+            </section>
+          </div>
         </div>
       </article>
 
@@ -470,9 +763,9 @@ onMounted(() => {
       </div>
     </section>
 
-    <section class="merchant-dashboard__summary" :aria-busy="isLoading">
+    <section class="merchant-dashboard__summary merchant-dashboard__summary--triple" :aria-busy="isLoading">
       <article
-        v-for="card in overviewCards"
+        v-for="card in financeCards"
         :key="card.label"
         class="metric-card"
       >
@@ -480,6 +773,79 @@ onMounted(() => {
         <strong class="metric-card__value">{{ card.value }}</strong>
         <span class="metric-card__hint">{{ card.hint }}</span>
       </article>
+    </section>
+
+    <section class="merchant-dashboard__overview-grid" :aria-busy="isLoading">
+      <div class="merchant-dashboard__summary">
+        <article
+          v-for="card in overviewCards"
+          :key="card.label"
+          class="metric-card"
+        >
+          <p class="metric-card__label">{{ card.label }}</p>
+          <strong class="metric-card__value">{{ card.value }}</strong>
+          <span class="metric-card__hint">{{ card.hint }}</span>
+        </article>
+      </div>
+
+      <FunnelView :funnel="funnel" />
+    </section>
+
+    <section class="merchant-dashboard__layer" :aria-busy="isLoading">
+      <div class="merchant-dashboard__layer-grid">
+        <article class="dashboard-panel merchant-forecast-panel">
+          <div class="dashboard-panel__header">
+            <div>
+              <p class="section-kicker">SALES FORECAST</p>
+              <h3>爆火商品销量预测（30天）</h3>
+              <p>自动选取近7天购买最多的商品，对未来30天销量进行预测并给出区间。</p>
+            </div>
+            <span class="dashboard-panel__badge">
+              预测总销量 {{ salesForecast.forecast_total?.value ?? 0 }}
+            </span>
+          </div>
+
+          <div v-if="salesForecast.product" class="merchant-forecast-panel__product">
+            <div class="merchant-product-thumb">
+              <img
+                v-if="salesForecast.product.image_url"
+                class="merchant-product-thumb__image"
+                :src="salesForecast.product.image_url"
+                :alt="salesForecast.product.name"
+                width="56"
+                height="56"
+                loading="lazy"
+              />
+              <div v-else class="merchant-product-thumb__placeholder">
+                {{ String(salesForecast.product.name || '').trim().slice(0, 1) }}
+              </div>
+            </div>
+            <div class="merchant-forecast-panel__product-meta">
+              <strong>{{ salesForecast.product.name }}</strong>
+              <span>{{ salesForecast.product.category }} / {{ salesForecast.product.brand }}</span>
+              <span>
+                预测区间 {{ salesForecast.forecast_total?.lower ?? 0 }} - {{ salesForecast.forecast_total?.upper ?? 0 }}
+              </span>
+            </div>
+          </div>
+
+          <p v-if="isLoadingForecast" class="empty-state">预测生成中...</p>
+          <template v-else>
+            <TrendLineChart
+              v-if="forecastChart.days.length"
+              :days="forecastChart.days"
+              :series="forecastChart.series"
+            />
+            <p v-else class="empty-state">暂无可预测商品：近7/30天购买数据不足。</p>
+
+            <ul v-if="salesForecast.explain?.length" class="merchant-forecast-panel__explain">
+              <li v-for="item in salesForecast.explain" :key="item">
+                {{ item }}
+              </li>
+            </ul>
+          </template>
+        </article>
+      </div>
     </section>
 
     <section class="merchant-dashboard__layer" :aria-busy="isLoading">
@@ -492,6 +858,50 @@ onMounted(() => {
         />
       </div>
     </section>
+
+    <section class="merchant-dashboard__layer" :aria-busy="isLoading">
+      <div class="merchant-dashboard__layer-grid">
+        <article class="dashboard-panel">
+          <div class="dashboard-panel__header">
+            <div>
+              <p class="section-kicker">CATEGORY SHARE</p>
+              <h3>品类占比</h3>
+              <p>按行为量聚合，快速判断当前流量集中在哪些品类。</p>
+            </div>
+          </div>
+          <SharePieChart :items="chartShare.category_share || []" />
+        </article>
+
+        <article class="dashboard-panel">
+          <div class="dashboard-panel__header">
+            <div>
+              <p class="section-kicker">BRAND SHARE</p>
+              <h3>品牌销量占比</h3>
+              <p>按购买次数聚合，直观看到销量冠军品牌。</p>
+            </div>
+          </div>
+          <SharePieChart :items="chartShare.brand_share || []" />
+        </article>
+
+        <article class="dashboard-panel">
+          <div class="dashboard-panel__header">
+            <div>
+              <p class="section-kicker">7D TREND</p>
+              <h3>近7天趋势</h3>
+              <p>浏览与购买的日趋势，辅助判断增长与转化节奏。</p>
+            </div>
+          </div>
+          <TrendLineChart :days="chartTrend.days || []" :series="chartTrend.series || []" />
+        </article>
+      </div>
+    </section>
+
+    <MerchantOpsOverview
+      :payload="opsOverview"
+      :show-summary-cards="false"
+      :on-deactivate="handleDeactivateProduct"
+      :is-deactivating-id="deactivatingProductId"
+    />
   </section>
 
   <section

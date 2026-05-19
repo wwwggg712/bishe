@@ -1,8 +1,5 @@
 import os
 
-from app import create_app
-
-
 def _load_env_file(path):
     if not os.path.exists(path):
         return
@@ -19,6 +16,8 @@ def _load_env_file(path):
 
 
 _load_env_file(os.path.join(os.path.dirname(__file__), ".env"))
+
+from app import create_app
 
 app = create_app()
 

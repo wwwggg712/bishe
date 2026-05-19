@@ -56,7 +56,9 @@ export async function fetchPredictionAnomalies(params = {}) {
 }
 
 export async function fetchMerchantBrief(payload) {
-  const response = await http.post('/api/llm/report', payload)
+  const response = await http.post('/api/llm/report', payload, {
+    timeout: 12000
+  })
   return response.data
 }
 
@@ -64,6 +66,8 @@ export async function fetchMerchantAiAnalysis(payload) {
   const response = await http.post('/api/llm/report', {
     scene: 'merchant',
     ...payload
+  }, {
+    timeout: 25000
   })
   return response.data
 }

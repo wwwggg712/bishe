@@ -95,6 +95,11 @@ const ACTION_LABELS = {
   purchase: '购买'
 }
 
+function formatPrice(value) {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue.toFixed(2) : '0.00'
+}
+
 function buildActionKey(productId, actionType) {
   return `${productId}:${actionType}`
 }
@@ -239,9 +244,31 @@ onMounted(() => {
             :key="item.product_id"
             class="recommend-list__item"
           >
-            <strong>{{ item.product_name }}</strong>
-            <span>{{ item.category }}</span>
-            <p>{{ item.reason }}</p>
+            <div class="recommend-product">
+              <div class="recommend-product__media">
+                <img
+                  v-if="item.image_url"
+                  class="recommend-product__image"
+                  :src="item.image_url"
+                  :alt="item.product_name"
+                  loading="lazy"
+                />
+                <div v-else class="recommend-product__placeholder">
+                  {{ (item.product_name || '商品').slice(0, 1) }}
+                </div>
+              </div>
+              <div class="recommend-product__body">
+                <div class="recommend-product__title-row">
+                  <strong>{{ item.product_name }}</strong>
+                  <span class="recommend-product__price">￥{{ formatPrice(item.price) }}</span>
+                </div>
+                <div class="recommend-product__tags">
+                  <span class="recommend-product__tag">{{ item.brand || '未知品牌' }}</span>
+                  <span class="recommend-product__tag">{{ item.category }}</span>
+                </div>
+                <p>{{ item.reason }}</p>
+              </div>
+            </div>
             <div class="customer-action-buttons">
               <button
                 class="ghost-button"
@@ -279,6 +306,13 @@ onMounted(() => {
               >
                 购买
               </button>
+              <router-link
+                class="ghost-button"
+                :data-testid="`customer-action-compare-${item.product_id}`"
+                :to="{ name: 'customer-price-compare', query: { product_id: item.product_id } }"
+              >
+                比价
+              </router-link>
             </div>
           </li>
         </ul>

@@ -8,6 +8,10 @@ from .routes.admin import bp as admin_bp
 from .routes.analytics import bp as analytics_bp
 from .routes.auth import bp as auth_bp
 from .routes.llm import bp as llm_bp
+from .routes.merchant_charts import bp as merchant_charts_bp
+from .routes.merchant_ops import bp as merchant_ops_bp
+from .routes.merchant_prediction import bp as merchant_prediction_bp
+from .routes.price_compare import bp as price_compare_bp
 from .routes.prediction import bp as prediction_bp
 from .routes.recommendation import bp as recommendation_bp
 from .routes.simulation import bp as simulation_bp
@@ -36,6 +40,10 @@ def create_app(config_overrides=None):
     app.register_blueprint(admin_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(llm_bp)
+    app.register_blueprint(merchant_charts_bp)
+    app.register_blueprint(merchant_ops_bp)
+    app.register_blueprint(merchant_prediction_bp)
+    app.register_blueprint(price_compare_bp)
     app.register_blueprint(prediction_bp)
     app.register_blueprint(recommendation_bp)
     app.register_blueprint(simulation_bp)

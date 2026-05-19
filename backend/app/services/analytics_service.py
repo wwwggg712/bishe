@@ -13,6 +13,7 @@ HOT_SCORE_WEIGHTS = {
     "cart": 5,
     "purchase": 8,
 }
+HOT_SCORE_HALF_LIFE_HOURS = 24
 MERCHANT_BEHAVIOR_WEIGHTS = {
     "favorite": 3,
     "cart": 5,
@@ -68,7 +69,7 @@ class AnalyticsService:
         region_counter = Counter(log["region"] for log in scoped_logs)
         view_count = action_counter.get("view", 0)
         purchase_count = action_counter.get("purchase", 0)
-        purchase_rate = purchase_count / view_count if view_count else 0
+        purchase_rate = (purchase_count + 1) / (view_count + 2) if view_count else 0
 
         return {
             "totals": {
@@ -140,6 +141,24 @@ class AnalyticsService:
 
     def _build_product_scores(self, logs, merchant_id=None):
         scoped_logs = self._merchant_logs(logs, merchant_id)
+        latest_timestamp = None
+        parsed_timestamps = {}
+        for log in scoped_logs:
+            raw_timestamp = log.get("timestamp")
+            if not raw_timestamp:
+                continue
+            try:
+                parsed = (
+                    raw_timestamp
+                    if isinstance(raw_timestamp, datetime)
+                    else datetime.fromisoformat(raw_timestamp)
+                )
+            except Exception:
+                continue
+            parsed_timestamps[id(log)] = parsed
+            if latest_timestamp is None or parsed > latest_timestamp:
+                latest_timestamp = parsed
+
         product_scores = defaultdict(
             lambda: {"product_id": None, "product_name": "", "hot_score": 0, "count": 0}
         )
@@ -148,7 +167,21 @@ class AnalyticsService:
             item["product_id"] = log["product_id"]
             item["product_name"] = log["product_name"]
             item["count"] += 1
-            item["hot_score"] += HOT_SCORE_WEIGHTS.get(log["action_type"], 0)
+            weight = HOT_SCORE_WEIGHTS.get(log["action_type"], 0)
+            if weight <= 0:
+                continue
+            decay = 1.0
+            if latest_timestamp is not None:
+                parsed = parsed_timestamps.get(id(log))
+                if parsed is not None:
+                    delta_hours = max(
+                        (latest_timestamp - parsed).total_seconds() / 3600.0, 0.0
+                    )
+                    decay = 0.5 ** (delta_hours / HOT_SCORE_HALF_LIFE_HOURS)
+            item["hot_score"] += weight * decay
+
+        for item in product_scores.values():
+            item["hot_score"] = round(float(item["hot_score"]), 2)
         return list(product_scores.values())
 
     def build_hot_products(self, logs, merchant_id=None):
@@ -337,7 +370,7 @@ class AnalyticsService:
             view_count = payload["view_count"]
             purchase_count = payload["purchase_count"]
             payload["conversion_rate"] = (
-                purchase_count / view_count if view_count else 0.0
+                (purchase_count + 1) / (view_count + 2) if view_count else 0.0
             )
             payload["hot_score"] = sum(
                 payload[f"{action}_count"] * weight

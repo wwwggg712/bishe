@@ -54,7 +54,7 @@ def test_overview_returns_core_metrics(
         "view_count": 1,
         "uv": 2,
         "purchase_count": 1,
-        "purchase_rate": 1.0,
+        "purchase_rate": 0.6667,
     }
     assert payload["funnel"] == {
         "view": 1,
@@ -93,7 +93,7 @@ def test_merchant_overview_only_counts_current_merchant_logs(
         "view_count": 1,
         "uv": 1,
         "purchase_count": 1,
-        "purchase_rate": 1.0,
+        "purchase_rate": 0.6667,
     }
     assert payload["top_products"] == [
         {"product_id": 101, "product_name": "轻量跑鞋", "count": 2}
@@ -178,6 +178,52 @@ def test_brands_returns_brand_breakdown_for_current_merchant(
     assert {item["brand"] for item in items} == {"云步", "活力穿"}
     assert {item["brand"]: item["count"] for item in items}["云步"] == 2
     assert {item["brand"]: item["count"] for item in items}["活力穿"] == 1
+
+
+def test_hot_products_prioritizes_recent_activity_with_time_decay(
+    client, merchant_headers, seeded_demo_data, persist_behavior_logs
+):
+    old_timestamp = "2026-05-10T10:00:00"
+    latest_timestamp = "2026-05-12T10:00:00"
+
+    logs = []
+    for idx in range(1, 21):
+        logs.append(
+            {
+                **_make_log(
+                    idx,
+                    101,
+                    "历史浏览很多的商品",
+                    "view",
+                    "华东",
+                    merchant_id=2,
+                ),
+                "timestamp": old_timestamp,
+            }
+        )
+
+    for idx in range(21, 23):
+        logs.append(
+            {
+                **_make_log(
+                    idx,
+                    202,
+                    "近期加购更强的商品",
+                    "cart",
+                    "华东",
+                    merchant_id=2,
+                ),
+                "timestamp": latest_timestamp,
+            }
+        )
+
+    persist_behavior_logs(logs)
+
+    response = client.get("/api/analytics/products/hot", headers=merchant_headers)
+
+    assert response.status_code == 200
+    items = response.get_json()["items"]
+    assert items[0]["product_name"] == "近期加购更强的商品"
 
 
 def test_customer_cannot_access_merchant_overview(

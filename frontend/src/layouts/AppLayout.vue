@@ -23,6 +23,7 @@ const navigationItems = computed(() => {
     return [
       { label: '推荐首页', to: '/customer/home' },
       { label: '推荐中心', to: '/customer/recommendations' },
+      { label: '比价助手', to: '/customer/price-compare' },
       { label: '个人画像', to: '/customer/profile' }
     ]
   }

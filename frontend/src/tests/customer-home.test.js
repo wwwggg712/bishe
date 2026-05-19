@@ -4,6 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { routes } from '../router/index.js'
 import CustomerHome from '../views/customer/CustomerHome.vue'
 
+function mountCustomerHome() {
+  return mount(CustomerHome, {
+    global: {
+      stubs: {
+        RouterLink: {
+          props: ['to'],
+          template: '<a><slot /></a>'
+        }
+      }
+    }
+  })
+}
+
 vi.mock('../api/recommendation.js', () => ({
   fetchMyRecommendations: vi.fn(),
   fetchTrendProducts: vi.fn(),
@@ -94,7 +107,7 @@ describe('customer home', () => {
   })
 
   it('renders recommendations, trend products and preference profile sections', async () => {
-    const wrapper = mount(CustomerHome)
+    const wrapper = mountCustomerHome()
 
     await flushPromises()
 
@@ -133,7 +146,7 @@ describe('customer home', () => {
       profile_tags: []
     })
 
-    const wrapper = mount(CustomerHome)
+    const wrapper = mountCustomerHome()
     await flushPromises()
 
     expect(wrapper.text()).toContain('冷启动推荐')
@@ -143,7 +156,7 @@ describe('customer home', () => {
   })
 
   it('renders customer ai explanation entry and result', async () => {
-    const wrapper = mount(CustomerHome)
+    const wrapper = mountCustomerHome()
 
     await flushPromises()
 
@@ -184,7 +197,7 @@ describe('customer home', () => {
       profile_tags: []
     })
 
-    const wrapper = mount(CustomerHome)
+    const wrapper = mountCustomerHome()
     await flushPromises()
 
     expect(wrapper.text()).toContain('冷启动推荐')
@@ -211,7 +224,7 @@ describe('customer home', () => {
       profile_tags: []
     })
 
-    const wrapper = mount(CustomerHome)
+    const wrapper = mountCustomerHome()
     await flushPromises()
 
     await wrapper.find('button[data-testid="customer-ai-generate"]').trigger('click')
@@ -248,7 +261,7 @@ describe('customer home', () => {
       profile_tags: ['运动服饰偏好']
     })
 
-    const wrapper = mount(CustomerHome)
+    const wrapper = mountCustomerHome()
     await flushPromises()
 
     expect(wrapper.text()).toContain('本次会话刚刚操作')
@@ -316,7 +329,7 @@ describe('customer home', () => {
         profile_tags: ['运动鞋偏好']
       })
 
-    const wrapper = mount(CustomerHome)
+    const wrapper = mountCustomerHome()
     await flushPromises()
 
     expect(wrapper.text()).toContain('你还没有进行操作')
@@ -378,7 +391,7 @@ describe('customer home', () => {
         profile_tags: ['运动服饰偏好']
       })
 
-    const wrapper = mount(CustomerHome)
+    const wrapper = mountCustomerHome()
     await flushPromises()
 
     expect(wrapper.text()).toContain('冷启动推荐')

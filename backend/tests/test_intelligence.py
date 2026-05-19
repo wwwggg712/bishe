@@ -943,6 +943,8 @@ def test_prediction_anomalies_grade_severity_against_baseline(
     assert anomaly["severity"] == "high"
     assert anomaly["current_value"] > anomaly["baseline_value"]
     assert anomaly["change_ratio"] > 2
+    assert "z_score" in anomaly
+    assert anomaly["z_score"] >= 2.0
     assert anomaly["baseline"] == anomaly["baseline_value"]
     assert anomaly["delta"] == anomaly["current_value"] - anomaly["baseline"]
     assert anomaly["reason"]
